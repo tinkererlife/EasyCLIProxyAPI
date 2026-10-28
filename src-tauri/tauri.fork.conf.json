@@ -1,0 +1,13 @@
+{
+  "bundle": {
+    "resources": {
+      "../core-version.txt": "core-version.txt",
+      "../fork-core-lock.json": "fork-core-lock.json",
+      "../cpa-core/CLIProxyAPI_*_darwin_*.tar.gz": "cpa-core/",
+      "../cpa-core/checksums.txt": "cpa-core/checksums.txt"
+    },
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}

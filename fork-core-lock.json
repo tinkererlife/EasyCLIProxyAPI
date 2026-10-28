@@ -1,0 +1,8 @@
+{
+  "version": "8.0.44",
+  "source": "https://github.com/router-for-me/CLIProxyAPI/releases/tag/v8.0.44",
+  "archives": {
+    "CLIProxyAPI_8.0.44_darwin_aarch64.tar.gz": "50b75e0bcec8576b93561f2ab2941ff08af26fc9273cf686e9c2b337716bbc46",
+    "CLIProxyAPI_8.0.44_darwin_amd64.tar.gz": "bf605a5a0c432bb85ca219a3ba5963b2cc65d3dcec4aad3ab61e46f1895e3a65"
+  }
+}

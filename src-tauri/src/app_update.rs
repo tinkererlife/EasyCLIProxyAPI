@@ -149,29 +149,17 @@ pub(crate) fn open_external_url(app: tauri::AppHandle, url: String) -> Result<()
 #[tauri::command]
 pub(crate) async fn check_app_update(
     app: tauri::AppHandle,
-    state: tauri::State<'_, AppUpdateState>,
-    gui_config_state: tauri::State<'_, GuiConfigState>,
+    _state: tauri::State<'_, AppUpdateState>,
+    _gui_config_state: tauri::State<'_, GuiConfigState>,
 ) -> Result<AppUpdateInfo, String> {
-    // Startup and manual version checks also refresh model defaults. Keep this
-    // independent so a catalog download failure does not fail the version check.
-    let catalog_app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        if let Err(error) = update_codex_model_catalog_inner(&catalog_app).await {
-            eprintln!("Failed to update Codex model catalog during version check; continuing with current catalog: {error}");
-        }
-    });
-    let (info, _) = resolve_app_update(&app, gui_config_state.inner()).await?;
-    state.set_available(AppUpdateTask {
-        phase: if info.update_available {
-            "available".to_string()
-        } else {
-            "idle".to_string()
-        },
-        target_version: info.update_available.then(|| info.latest_version.clone()),
-        total_bytes: info.download_size_bytes,
-        ..AppUpdateTask::default()
-    });
-    Ok(info)
+    let version = app.package_info().version.to_string();
+    Ok(AppUpdateInfo {
+        current_version: version.clone(), latest_version: version,
+        update_available: false, release_url: fork_policy::REPOSITORY.into(),
+        release_notes: HashMap::new(), published_at: String::new(),
+        auto_update_supported: false, download_size_bytes: None,
+        unsupported_reason: Some(fork_policy::MANUAL_UPDATES.into()),
+    })
 }
 
 async fn resolve_app_update(
@@ -676,6 +664,7 @@ pub(crate) async fn start_app_update(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppUpdateState>,
 ) -> Result<(), String> {
+    fork_policy::require_manual_update()?;
     if portable_update_platform_key().is_none() {
         return Err("The current platform does not support in-app automatic upgrades".to_string());
     }

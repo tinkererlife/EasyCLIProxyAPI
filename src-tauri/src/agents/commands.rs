@@ -384,6 +384,7 @@ pub(crate) async fn update_codex_model_catalog(
 pub(crate) async fn update_codex_model_catalog_inner(
     app: &tauri::AppHandle,
 ) -> Result<CodexModelCatalogUpdateResult, String> {
+    fork_policy::require_manual_update()?;
     let _update_guard = CODEX_CATALOG_UPDATE_LOCK.lock().await;
     let proxy_url = app.state::<GuiConfigState>().snapshot()?.proxy_url;
     let client = build_http_client_with_proxy(

@@ -139,34 +139,12 @@ async fn run_core_command(
 
 #[tauri::command]
 pub(crate) async fn check_latest_core(
-    app: tauri::AppHandle,
-    gui_config_state: tauri::State<'_, GuiConfigState>,
+    _app: tauri::AppHandle,
+    _gui_config_state: tauri::State<'_, GuiConfigState>,
 ) -> Result<CoreLatest, String> {
-    let _detection_guard = VERSION_SOURCE_DETECTION_LOCK.lock().await;
-    let platform = current_core_platform()?;
-    let config = gui_config_state.snapshot()?;
-    let proxy_url = config.proxy_url.clone();
-    let client = http_client(&proxy_url, &config.custom_download_mirrors)?;
-    let requested_source = config.selected_download_candidate();
-    let (release, resolved_source) = fetch_release(
-        &client,
-        None,
-        requested_source.clone(),
-        &config.custom_download_mirrors,
-    )
-    .await?;
-    persist_automatic_download_source_switch(
-        &app,
-        gui_config_state.inner(),
-        &requested_source,
-        &resolved_source,
-    )?;
-    let asset = select_release_asset(&release, &platform)?;
-
-    Ok(CoreLatest {
-        version: normalize_version(&release.tag_name),
-        asset_name: asset.name.clone(),
-    })
+    let (info, _) = bundled_core_archive()?
+        .ok_or_else(|| "No pinned bundled core is available".to_string())?;
+    Ok(CoreLatest { version: info.version, asset_name: info.asset_name })
 }
 
 #[tauri::command]
@@ -312,80 +290,12 @@ pub(crate) struct StagedCoreInstall {
 
 #[tauri::command]
 pub(crate) async fn install_core_version(
-    app: tauri::AppHandle,
-    window: tauri::Window,
+    _app: tauri::AppHandle,
+    _window: tauri::Window,
     version: Option<String>,
 ) -> Result<CoreInstallResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _guard = lock_core_operation(app.state::<CoreProcessState>().inner())?;
-        let state = app.state::<CoreDownloadState>();
-        let process_state = app.state::<CoreProcessState>();
-        let gui_config_state = app.state::<GuiConfigState>();
-        let config = gui_config_state.snapshot()?;
-        let proxy_url = config.proxy_url.clone();
-        let rollback_dir = core_base_dir()?.join("cpa-core.rollback");
-        archive_previous_core_rollback(&rollback_dir)?;
-        let token = CancellationToken::new();
-        state.start(token.clone(), version.clone())?;
-
-        // Stage download, SHA-256 verification, and archive extraction BEFORE stopping the running core.
-        let staged_result = tauri::async_runtime::block_on(stage_core_version_inner(
-            &app,
-            &window,
-            state.inner(),
-            gui_config_state.inner(),
-            token,
-            version,
-            &proxy_url,
-            config.selected_download_candidate(),
-            config.custom_download_mirrors.clone(),
-        ));
-
-        let result = staged_result.and_then(|staged| {
-            let was_running = pause_core_for_install(&app, process_state.inner(), &config)?;
-            let swap_and_restore = apply_staged_core_with_rollback(
-                &staged.install_dir,
-                &staged.staging_dir,
-                &rollback_dir,
-                || {
-                    if was_running && !process_state.is_shutting_down() {
-                        start_core_process_inner(process_state.inner(), &config)
-                    } else {
-                        Ok(())
-                    }
-                },
-            );
-            let swap_and_restore = match swap_and_restore {
-                Err(error) if was_running && !process_state.is_shutting_down() => {
-                    match start_core_process_inner(process_state.inner(), &config) {
-                        Ok(()) => Err(error),
-                        Err(resume_error) => Err(format!(
-                            "{error}; failed to start the previous kernel again: {resume_error}"
-                        )),
-                    }
-                }
-                other => other,
-            };
-            emit_current_core_status(&app, process_state.inner(), config.port);
-            swap_and_restore.map(|()| CoreInstallResult {
-                version: staged.version,
-                asset_name: staged.asset_name,
-                install_dir: path_to_string(&staged.install_dir),
-                binary_path: Some(path_to_string(
-                    &staged.install_dir.join(&staged.binary_relative_path),
-                )),
-            })
-        });
-
-        if result.is_err() {
-            let _ = cleanup_core_work_dirs();
-        }
-        state.finish(&window, result.clone());
-
-        result
-    })
-    .await
-    .map_err(|error| format!("Kernel installation background task failed: {error}"))?
+    let _ = version;
+    Err(fork_policy::MANUAL_UPDATES.to_string())
 }
 
 fn install_core_with_runtime_restore<F>(
@@ -1547,6 +1457,9 @@ pub(crate) fn start_core_process_inner(
 ) -> Result<(), String> {
     process_state.ensure_active()?;
     let mut resolved_config = gui_config.clone();
+    resolved_config.host = "127.0.0.1".into();
+    resolved_config.allow_lan = false;
+    resolved_config.plugins_enabled = false;
     resolved_config.proxy_url = network_proxy::resolve(gui_config);
     let gui_config = &resolved_config;
     let install_dir = core_install_dir()?;
@@ -1785,10 +1698,15 @@ pub(crate) fn core_base_dir() -> Result<PathBuf, String> {
         let home_dir = env::var_os("HOME")
             .map(PathBuf::from)
             .ok_or_else(|| "Unable to determine macOS user directory".to_string())?;
-        return Ok(home_dir
+        let directory = home_dir
             .join("Library")
             .join("Application Support")
-            .join("com.cpa.gui"));
+            .join("life.tinkerer.cliproxy");
+        fs::create_dir_all(&directory).map_err(|error| format!("Cannot create local app data: {error}"))?;
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))
+            .map_err(|error| format!("Cannot restrict local app data permissions: {error}"))?;
+        return Ok(directory);
     }
     Ok(executable_dir)
 }
@@ -2020,6 +1938,7 @@ pub(crate) fn migrate_core_config_for_update(
 }
 
 pub(crate) fn validate_bundled_core_checksum(archive_path: &Path) -> Result<(), String> {
+    fork_policy::verify_core_archive(archive_path)?;
     let Some(directory) = archive_path.parent() else {
         return Err("Bundled kernel archive has no parent directory".to_string());
     };

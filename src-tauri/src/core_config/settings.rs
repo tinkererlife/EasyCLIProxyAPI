@@ -1703,7 +1703,7 @@ pub(crate) fn apply_external_core_proxy_override(
 
 pub(crate) fn default_api_key_entry() -> GuiApiKeyEntry {
     GuiApiKeyEntry {
-        key: DEFAULT_API_KEY.to_string(),
+        key: fork_policy::new_local_key(),
         remark: DEFAULT_API_KEY_INITIAL_REMARK.to_string(),
     }
 }
@@ -2082,6 +2082,22 @@ pub(crate) fn sanitize_gui_config_at(
     persistent_auth_dir: &Path,
 ) -> Result<bool, String> {
     let mut changed = false;
+    if config.host != "127.0.0.1" || config.allow_lan || config.plugins_enabled {
+        config.host = "127.0.0.1".into();
+        config.allow_lan = false;
+        config.plugins_enabled = false;
+        changed = true;
+    }
+    if config.management_secret_key.is_empty() || config.management_secret_key == LEGACY_DEFAULT_MANAGEMENT_SECRET_KEY {
+        config.management_secret_key = fork_policy::new_local_key();
+        changed = true;
+    }
+    for entry in &mut config.api_keys {
+        if entry.key == DEFAULT_API_KEY {
+            entry.key = fork_policy::new_local_key();
+            changed = true;
+        }
+    }
     let normalized_locale = normalize_app_locale(&config.locale);
     if config.locale != normalized_locale {
         config.locale = normalized_locale.to_string();

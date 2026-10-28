@@ -9,6 +9,7 @@ mod codex_sessions;
 mod configuration_watcher;
 mod core_config;
 mod core_runtime;
+mod fork_policy;
 mod core_recovery;
 mod desktop_theme;
 mod instance_lock;
@@ -113,20 +114,20 @@ const RELEASE_ATOM_URL: &str = "https://github.com/router-for-me/CLIProxyAPI/rel
 const RELEASE_DOWNLOAD_PREFIX: &str =
     "https://github.com/router-for-me/CLIProxyAPI/releases/download/";
 #[cfg(windows)]
-const APP_UPDATE_MANIFEST_URL: &str = "https://github.com/router-for-me/EasyCLIProxyAPI/releases/latest/download/portable-update-windows.json";
+const APP_UPDATE_MANIFEST_URL: &str = "https://github.com/tinkererlife/EasyCLIProxyAPI/releases/latest/download/portable-update-windows.json";
 #[cfg(target_os = "linux")]
-const APP_UPDATE_MANIFEST_URL: &str = "https://github.com/router-for-me/EasyCLIProxyAPI/releases/latest/download/portable-update-linux.json";
+const APP_UPDATE_MANIFEST_URL: &str = "https://github.com/tinkererlife/EasyCLIProxyAPI/releases/latest/download/portable-update-linux.json";
 #[cfg(target_os = "macos")]
-const APP_UPDATE_MANIFEST_URL: &str = "https://github.com/router-for-me/EasyCLIProxyAPI/releases/latest/download/portable-update-darwin-v2.json";
+const APP_UPDATE_MANIFEST_URL: &str = "https://github.com/tinkererlife/EasyCLIProxyAPI/releases/latest/download/portable-update-darwin-v2.json";
 const APP_RELEASE_DOWNLOAD_PREFIX: &str =
-    "https://github.com/router-for-me/EasyCLIProxyAPI/releases/download/";
+    "https://github.com/tinkererlife/EasyCLIProxyAPI/releases/download/";
 #[cfg(windows)]
 const APP_UPDATE_MANIFEST_NAME: &str = "portable-update-windows.json";
 #[cfg(target_os = "linux")]
 const APP_UPDATE_MANIFEST_NAME: &str = "portable-update-linux.json";
 #[cfg(target_os = "macos")]
 const APP_UPDATE_MANIFEST_NAME: &str = "portable-update-darwin-v2.json";
-const CODEX_MODEL_CATALOG_URL: &str = "https://raw.githubusercontent.com/router-for-me/EasyCLIProxyAPI/main/src-tauri/resources/codex_models/model-catalog.json";
+const CODEX_MODEL_CATALOG_URL: &str = "https://raw.githubusercontent.com/tinkererlife/EasyCLIProxyAPI/main/src-tauri/resources/codex_models/model-catalog.json";
 const CODEX_MODEL_CATALOG_OVERRIDE_DIR: &str = "codex_models";
 const CODEX_MODEL_CATALOG_SOURCE_FILE: &str = "model-catalog.json";
 const MAX_CODEX_MODEL_CATALOG_BYTES: usize = 4 * 1024 * 1024;
@@ -943,7 +944,7 @@ impl Default for GuiConfigFile {
             image_generation_user_selected: false,
             api_keys: vec![default_api_key_entry()],
             api_access_remarks: Vec::new(),
-            management_secret_key: LEGACY_DEFAULT_MANAGEMENT_SECRET_KEY.to_string(),
+            management_secret_key: fork_policy::new_local_key(),
             debug: false,
             commercial_mode: false,
             logging_to_file: false,
@@ -2530,10 +2531,8 @@ fn main() {
                 return;
             }
             let mut config = GuiConfigFile::default();
-            // If the GUI configuration cannot be read before the kernel starts,
-            // use the shared recovery key so requests and the generated kernel
-            // configuration stay synchronized.
-            config.management_secret_key = LEGACY_DEFAULT_MANAGEMENT_SECRET_KEY.to_string();
+            // Fail closed with a fresh credential rather than the upstream shared recovery key.
+            config.management_secret_key = fork_policy::new_local_key();
             if let Err(sanitize_error) = sanitize_gui_config(&mut config) {
                 eprintln!("Failed to initialize fixed credentials directory: {sanitize_error}");
             }

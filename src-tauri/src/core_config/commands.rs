@@ -441,6 +441,7 @@ pub(crate) fn set_core_plugins_enabled(
     enabled: bool,
 ) -> Result<CoreConfigView, String> {
     let mut settings = current_core_config_settings(gui_config_state.inner())?;
+    if enabled { fork_policy::require_manual_update()?; }
     settings.plugins_enabled = enabled;
     patch_core_plugins_enabled(settings.plugins_enabled)?;
     let config = gui_config_state.sync_core_settings(&settings)?;

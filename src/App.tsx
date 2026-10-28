@@ -39,7 +39,7 @@ import { CoreUpdateProvider, useCoreUpdate } from './coreUpdate';
 import { ConfigPanelPage } from './pages/ConfigPanel';
 import { ApiAccessPage } from './pages/ApiAccessPage';
 import { KernelPage } from './pages/Kernel';
-import { VersionManagementPage } from './pages/VersionManagementPage';
+import { VersionManagementPage } from './pages/ForkVersionsPage';
 import { OAuthManagementPage } from './pages/ManagementPages';
 import { QuotaPage } from './pages/QuotaPage';
 import { AgentsPage } from './pages/AgentsPage';
@@ -366,7 +366,7 @@ function AppContent() {
             <div className="sidebar-brand" title={t('app.desktopConsole')}>
               <img src={appLogo} alt="" className="brand-mark brand-logo" />
               <div className="sidebar-brand-text">
-                <strong>EasyCLIProxyAPI</strong>
+                <strong>Tinkerer Proxy</strong>
                 <span>{t('app.desktopConsole')}</span>
               </div>
             </div>

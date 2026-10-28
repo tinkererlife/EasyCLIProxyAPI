@@ -31,6 +31,7 @@ pub(crate) fn merge_core_config_for_start(
         None
     };
     let merged = merge_core_config_yaml(&template, current.as_deref(), gui_config)?;
+    let merged = fork_policy::apply_local_config(&merged)?;
     write_core_config_if_changed(&config_path, &merged)?;
 
     Ok(config_path)

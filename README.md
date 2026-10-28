@@ -1,3 +1,11 @@
+# Tinkerer Proxy — tinkererlife fork
+
+A local Mac build of EasyCLIProxyAPI with a pinned core and manual updates.
+
+See [FORK.md](FORK.md) for build instructions, policy, and limitations. Original project documentation follows below.
+
+---
+
 <p align="center">
   <strong>English</strong> |
   <a href="README.zh-CN.md">简体中文</a> |
